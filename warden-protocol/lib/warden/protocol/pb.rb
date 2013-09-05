@@ -279,6 +279,27 @@ module Warden
 
     end
 
+
+
+    class LimitCpuRequest
+      include Warden::Protocol::BaseMessage
+
+
+      required :handle, :string, 1
+      optional :cpu_limit, :uint64, 2
+
+    end
+
+    class LimitCpuResponse
+      include Warden::Protocol::BaseMessage
+
+
+      optional :cpu_limit, :uint64, 2
+
+    end
+
+
+
     class LinkRequest
       include Warden::Protocol::BaseMessage
 
@@ -334,6 +355,7 @@ module Warden
         LimitMemory = 51
         LimitDisk = 52
         LimitBandwidth = 53
+        LimitCpu = 54
         Ping = 91
         List = 92
         Echo = 93
