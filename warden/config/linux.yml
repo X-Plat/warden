@@ -35,13 +35,14 @@ server:
   job_output_limit: 10485760
 
   quota:
-    disk_quota_enabled: true
+    disk_quota_enabled: false
 
 health_check_server:
   port: 2345
 
 logging:
   level: debug2
+  file: /home/work/warden/warden/log/warden.log
 
 network:
   # Use this /30 network as offset for the network pool.
@@ -49,6 +50,16 @@ network:
 
   # Pool this many /30 networks.
   pool_size: 256
+
+cgroup:
+  #please specify the percentage of cpu/memory for dea and sys, dea+sys=100
+  cpu_sys_percent: 10
+  cpu_dea_percent: 90
+  mem_sys_percent: 20
+  mem_dea_percent: 80
+  cpu_total: 2000
+  #mem_total MB
+  mem_total: 20480
 
 user:
   pool_start_uid: 10000

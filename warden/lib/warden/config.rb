@@ -79,6 +79,30 @@ module Warden
       end
     end
 
+    def self.cgroup_schema
+      ::Membrane::SchemaParser.parse do
+        {
+          "cpu_sys_percent"  => Integer,
+          "cpu_dea_percent"  => Integer,
+          "mem_sys_percent" => Integer,
+          "mem_dea_percent" => Integer,
+          "cpu_total" => Integer,
+          "mem_total" => Integer,
+        }
+      end
+    end
+
+    def self.cgroup_defaults
+        {
+          "cpu_sys_percent"  => 10,
+          "cpu_dea_percent"  => 10,
+          "mem_sys_percent" => 10,
+          "mem_dea_percent" => 10,
+          "cpu_total" => 10000,
+          "mem_total" => 20240,
+        }
+    end
+
     def self.network_defaults
       {
         "pool_network"   => "10.254.0.0/24",
@@ -152,6 +176,7 @@ module Warden
     attr_reader :network
     attr_reader :port
     attr_reader :user
+    attr_reader :cgroup
 
     def initialize(config)
       @config = config
@@ -169,6 +194,7 @@ module Warden
       @network = self.class.network_defaults.merge(config["network"] || {})
       @port = self.class.port_defaults.merge(config["port"] || {})
       @user = self.class.user_defaults.merge(config["user"] || {})
+      @cgroup = self.class.cgroup_defaults.merge(config["cgroup"] || {})
     end
 
     def validate
@@ -177,6 +203,7 @@ module Warden
       self.class.network_schema.validate(@network)
       self.class.port_schema.validate(@port)
       self.class.user_schema.validate(@user)
+      self.class.cgroup_schema.validate(@cgroup)
     end
 
     def transform
@@ -210,6 +237,7 @@ module Warden
         "network" => network,
         "port"    => port,
         "user"    => user,
+        "cgroup"    => cgroup,
       }
     end
   end

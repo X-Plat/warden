@@ -295,7 +295,7 @@ module Warden
         klass_name = klass_name.gsub(/Request$/, "")
         klass_name = klass_name.gsub(/(.)([A-Z])/) { |m| "#{m[0]}_#{m[1]}" }
         klass_name = klass_name.downcase
-
+    
         response = request.create_response
 
         t1 = Time.now
@@ -569,7 +569,6 @@ module Warden
 
       def do_link(request, response)
         job = jobs[request.job_id]
-
         unless job
           raise WardenError.new("no such job")
         end
@@ -677,7 +676,22 @@ module Warden
         end
       end
 
+      def around_limit_cpu
+        check_state_in(State::Active, State::Stopped)
+
+        begin
+          delete_snapshot
+          yield
+        ensure
+          write_snapshot
+        end
+      end
+
       def do_limit_memory(request, response)
+        raise WardenError.new("not implemented")
+      end
+
+      def do_limit_cpu(request, response)
         raise WardenError.new("not implemented")
       end
 

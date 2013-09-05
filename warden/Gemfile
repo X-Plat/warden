@@ -1,7 +1,8 @@
 source "http://rubygems.org"
 
 gem "rake"
-gem "steno", "~> 0.0.15", :git => 'https://github.com/cloudfoundry/steno.git'
+gem "debugger"
+gem "steno", "> 0.0.15", :git => 'https://github.com/cloudfoundry/steno.git'
 gem "membrane", :git => 'https://github.com/cloudfoundry/membrane.git'
 gem "eventmachine", "~> 1.0.0"
 gem "em-posix-spawn", :git => 'https://github.com/cloudfoundry/common.git'

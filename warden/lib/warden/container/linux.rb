@@ -3,6 +3,7 @@
 require "warden/container/base"
 require "warden/container/features/cgroup"
 require "warden/container/features/mem_limit"
+require "warden/container/features/cpu_limit"
 require "warden/container/features/net"
 require "warden/container/features/quota"
 require "warden/errors"
@@ -19,6 +20,7 @@ module Warden
       include Features::Net
       include Features::MemLimit
       include Features::Quota
+      include Features::CpuLimit
 
       class << self
 
@@ -48,6 +50,12 @@ module Warden
               "CONTAINER_DEPOT_PATH" => container_depot_path,
               "CONTAINER_DEPOT_MOUNT_POINT_PATH" => container_depot_mount_point_path,
               "DISK_QUOTA_ENABLED" => disk_quota_enabled.to_s,
+	      "CPU_SYS_PERCENT" => config.cgroup["cpu_sys_percent"],
+	      "CPU_DEA_PERCENT" => config.cgroup["cpu_dea_percent"],
+	      "MEM_SYS_PERCENT" => config.cgroup["mem_sys_percent"],
+	      "MEM_DEA_PERCENT" => config.cgroup["mem_dea_percent"],
+	      "CPU_TOTAL" => config.cgroup["cpu_total"],
+	      "MEM_TOTAL" => config.cgroup["mem_total"],
             },
             :timeout => nil
           }
