@@ -95,9 +95,9 @@ module Warden
     def self.cgroup_defaults
         {
           "cpu_sys_percent"  => 10,
-          "cpu_dea_percent"  => 10,
+          "cpu_dea_percent"  => 90,
           "mem_sys_percent" => 10,
-          "mem_dea_percent" => 10,
+          "mem_dea_percent" => 90,
           "cpu_total" => 10000,
           "mem_total" => 20240,
         }

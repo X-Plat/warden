@@ -52,7 +52,7 @@ network:
   pool_size: 256
 
 cgroup:
-  #please specify the percentage of cpu/memory for dea and sys, dea+sys=100
+  #please specify the percentage of cpu/memory for dea and sys, dea+sys<=100
   cpu_sys_percent: 10
   cpu_dea_percent: 90
   mem_sys_percent: 20
