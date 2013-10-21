@@ -3,6 +3,7 @@
 require "warden/container/base"
 require "warden/container/features/cgroup"
 require "warden/container/features/mem_limit"
+require "warden/container/features/cpu_limit"
 require "warden/container/features/net"
 require "warden/container/features/quota"
 require "warden/errors"
@@ -19,6 +20,7 @@ module Warden
       include Features::Net
       include Features::MemLimit
       include Features::Quota
+      include Features::CpuLimit
 
       class << self
 
@@ -39,6 +41,14 @@ module Warden
             raise WardenError.new("container_depot_path does not exist #{container_depot_path}")
           end
 
+          if config.cgroup["cpu_sys_percent"].to_i+config.cgroup["cpu_dea_percent"].to_i>100
+            raise WardenError.new("cpu_sys_percent+cpu_dea_percent (linux.yml) can't be more than 100")
+          end
+
+          if config.cgroup["mem_sys_percent"].to_i+config.cgroup["mem_dea_percent"].to_i>100
+            raise WardenError.new("mem_sys_percent+mem_dea_percent (linux.yml) can't be more than 100")
+          end
+
           options = {
             :env => {
               "POOL_NETWORK" => config.network["pool_network"],
@@ -48,6 +58,12 @@ module Warden
               "CONTAINER_DEPOT_PATH" => container_depot_path,
               "CONTAINER_DEPOT_MOUNT_POINT_PATH" => container_depot_mount_point_path,
               "DISK_QUOTA_ENABLED" => disk_quota_enabled.to_s,
+	      "CPU_SYS_PERCENT" => config.cgroup["cpu_sys_percent"],
+	      "CPU_DEA_PERCENT" => config.cgroup["cpu_dea_percent"],
+	      "MEM_SYS_PERCENT" => config.cgroup["mem_sys_percent"],
+	      "MEM_DEA_PERCENT" => config.cgroup["mem_dea_percent"],
+	      "CPU_TOTAL" => config.cgroup["cpu_total"],
+	      "MEM_TOTAL" => config.cgroup["mem_total"],
             },
             :timeout => nil
           }

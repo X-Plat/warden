@@ -62,6 +62,8 @@ file=mnt/dev/zero
 mknod -m 666 $file c 1 5
 chown root:root $file
 
+mknod -m 666 mnt/dev/ptmx c 5 2
+
 # /dev/fd, /dev/std{in,out,err}
 pushd mnt/dev > /dev/null
 ln -s /proc/self/fd
@@ -98,6 +100,6 @@ fi
 $(which chroot) mnt env -i /bin/bash -l <<-EOS
 if ! id vcap > /dev/null 2>&1
 then
-  useradd -m -u $user_uid -s /bin/bash vcap
+  useradd -mU -u $user_uid -s /bin/bash vcap
 fi
 EOS
