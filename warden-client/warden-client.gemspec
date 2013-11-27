@@ -11,10 +11,11 @@ Gem::Specification.new do |s|
   s.summary     = %q{Client driver for warden, the ephemeral container manager.}
   s.description = %q{Provides a blocking client for interacting with the Warden.}
 
-  s.files         = Dir.glob("**/*")
+  s.files         = Dir.glob("lib/**/*")
   s.test_files    = Dir.glob("spec/**/*")
   s.executables   = []
   s.require_paths = ["lib"]
 
   s.add_runtime_dependency "warden-protocol", "~> 0.1.0"
+  s.add_development_dependency "rspec", "~> 2.11"
 end
