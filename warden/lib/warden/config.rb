@@ -132,6 +132,7 @@ module Warden
       {
         "pool_start_uid" => 10000,
         "pool_size"      => 64,
+        "username"       => "default",
       }
     end
 
@@ -140,6 +141,7 @@ module Warden
         {
           "pool_start_uid" => Integer,
           "pool_size"      => Integer,
+          "username"       => String,
         }
       end
     end
