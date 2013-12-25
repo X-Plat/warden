@@ -237,6 +237,7 @@ module Warden
 
         begin
           c = container_klass.from_snapshot(path)
+          c.setup_grace_timer
 
           logger.info("Recovered container at: #{path}", :resources => c.resources)
 
@@ -340,6 +341,9 @@ module Warden
         @bound = true
 
         Server.drainer.register_connection(self)
+        Server.container_klass.registry.each do |_, container|
+          container.register_connection(self)
+        end
       end
 
       def bound?

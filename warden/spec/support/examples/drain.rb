@@ -308,4 +308,23 @@ shared_examples "drain" do
     link_response.stderr.should == ""
     link_response.exit_status.should == 2
   end
+
+  describe "grace time" do
+    it "should destroy container after grace time on restart" do
+      handle = client.create(:grace_time => 0).handle
+      drain_and_restart
+      sleep 0.1
+      new_client = create_client
+      expect{ new_client.info(:handle => handle) }.to raise_error(/unknown handle/)
+    end
+
+    it "should cancel the timer when client reconnects" do
+      handle = client.create(:grace_time => 1).handle
+      drain_and_restart
+
+      new_client = create_client
+      sleep 1.1
+      expect{ new_client.info(:handle => handle) }.to_not raise_error(/unknown handle/)
+    end
+  end
 end
