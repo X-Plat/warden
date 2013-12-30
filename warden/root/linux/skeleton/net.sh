@@ -97,12 +97,14 @@ case "${1}" in
       exit 1
     fi
 
-    iptables -t nat -A ${nat_instance_chain} \
-      --protocol tcp \
-      --destination "${external_ip}" \
-      --destination-port "${HOST_PORT}" \
-      --jump DNAT \
-      --to-destination "${network_container_ip}:${CONTAINER_PORT}"
+    if [ "${CONTAINER_PORT}" -ne 22 ]; then
+      iptables -t nat -A ${nat_instance_chain} \
+        --protocol tcp \
+        --destination "${external_ip}" \
+        --destination-port "${HOST_PORT}" \
+        --jump DNAT \
+        --to-destination "${network_container_ip}:${CONTAINER_PORT}"
+    fi
 
     ;;
 
