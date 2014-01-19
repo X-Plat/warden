@@ -96,3 +96,9 @@ then
   useradd -m -u $user_uid -s /bin/bash $username
 fi
 EOS
+
+
+#add dir for noah   
+$(which chroot) mnt env -i /bin/bash -l <<-EOS
+    mkdir -p /home/noah
+EOS
