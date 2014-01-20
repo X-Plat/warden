@@ -39,6 +39,14 @@ function setup_fs_other() {
   mkdir -p $rootfs_path/app
   mount -n --bind $rootfs_path mnt
   mount -n --bind -o remount,ro $rootfs_path mnt
+  mount -n --bind /noah mnt/noah
+  mount -n --bind -o remount,ro /noah mnt/noah
+  mount -n --bind /noah/download mnt/noah/download
+  mount -n --bind -o remount,ro /noah/download mnt/noah/download
+  mount -n --bind /noah/modules mnt/noah/modules
+  mount -n --bind -o remount,ro /noah/modules mnt/noah/modules
+  mount -n --bind /noah/tmp mnt/noah/tmp
+  mount -n --bind -o remount,ro /noah/tmp mnt/noah/tmp
   overlay_directory_in_rootfs /dev rw
   overlay_directory_in_rootfs /etc rw
   overlay_directory_in_rootfs /home rw
