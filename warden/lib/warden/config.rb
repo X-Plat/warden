@@ -6,7 +6,7 @@ module Warden
   class Config
     def self.server_defaults
       {
-        "unix_domain_path"        => "/tmp/warden.sock",
+        "unix_domain_path"        => "/home/work/warden/warden/status/warden.sock",
         "unix_domain_permissions" => 0755,
         "container_klass"         => "Warden::Container::Insecure",
         "container_grace_time"    => (5 * 60), # 5 minutes

@@ -32,7 +32,7 @@ module Warden::Repl
       @exit_on_error = opts[:exit_on_error]
       @exit_on_error = false unless @exit_on_error
       @trace = opts[:trace] == true
-      @socket_path = opts[:socket_path] || "/tmp/warden.sock"
+      @socket_path = opts[:socket_path] || "/home/work/warden/warden/status/warden.sock"
       @client = Warden::Client.new(@socket_path)
       @history_path = opts[:history_path] || File.join(ENV['HOME'],
                                                        '.warden-history')
