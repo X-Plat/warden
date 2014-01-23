@@ -102,3 +102,9 @@ EOS
 $(which chroot) mnt env -i /bin/bash -l <<-EOS
     mkdir -p /home/noah
 EOS
+
+#add dir for coresave
+$(which chroot) mnt env -i /bin/bash -l <<-EOS
+    mkdir -p /home/coresave
+    chmod -R 777 /home/coresave
+EOS
