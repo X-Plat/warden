@@ -135,7 +135,8 @@ module Warden
       def create_job(request)
         wsh_path = File.join(bin_path, "wsh")
         socket_path = File.join(container_path, "run", "wshd.sock")
-        user = request.privileged ? "root" : app_user
+        container_user = request.work_user ? request.work_user : app_user
+        user = request.privileged ? "root" : container_user        
 
         # Build arguments
         args  = [wsh_path]
