@@ -245,6 +245,7 @@ char **child_setup_environment(struct passwd *pw) {
 
   envp = env__add(envp, "HOME", pw->pw_dir);
   envp = env__add(envp, "USER", pw->pw_name);
+  envp = env__add(envp,"TERM", "xterm");
 
   if (pw->pw_uid == 0) {
     envp = env__add(envp, "PATH", "/sbin:/bin:/usr/sbin:/usr/bin");
@@ -267,7 +268,8 @@ int child_fork(msg_request_t *req, int in, int out, int err) {
   if (rv == 0) {
     const char *user;
     struct passwd *pw;
-    char *default_argv[] = { "/bin/sh", NULL };
+    //char *default_argv[] = { "/bin/sh", NULL };
+    char *default_argv[] = { "/bin/sh","--login",NULL };
     char *default_envp[] = { NULL };
     char **argv = default_argv;
     char **envp = default_envp;
@@ -297,6 +299,7 @@ int child_fork(msg_request_t *req, int in, int out, int err) {
 
     if (strlen(pw->pw_shell)) {
       default_argv[0] = strdup(pw->pw_shell);
+      default_argv[1] = "--login";
     }
 
     /* Set controlling terminal if needed */
@@ -325,7 +328,6 @@ int child_fork(msg_request_t *req, int in, int out, int err) {
 
     envp = child_setup_environment(pw);
     assert(envp != NULL);
-
     execvpe(argv[0], argv, envp);
     perror("execvpe");
 
