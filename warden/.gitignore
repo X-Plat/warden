@@ -3,7 +3,6 @@
 pkg/*
 /tmp
 root/linux/skeleton/bin/wsh
-root/linux/skeleton/bin/wshd
 root/linux/skeleton/bin/iomux-link
 root/linux/skeleton/bin/iomux-spawn
 root/insecure/skeleton/bin/iomux-link
