@@ -245,7 +245,7 @@ char **child_setup_environment(struct passwd *pw) {
 
   envp = env__add(envp, "HOME", pw->pw_dir);
   envp = env__add(envp, "USER", pw->pw_name);
-  envp = env__add(envp,"TERM", "xterm");
+  envp = env__add(envp,"TERM", "vt100");
 
   if (pw->pw_uid == 0) {
     envp = env__add(envp, "PATH", "/sbin:/bin:/usr/sbin:/usr/bin");
