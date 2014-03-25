@@ -21,6 +21,23 @@ GIT
       yajl-ruby
 
 GIT
+  remote: https://github.com/cloudfoundry/vcap-common.git
+  revision: f7653c1140e6818fca6dd9a7591c2e3dc8d2e24b
+  specs:
+    vcap_common (2.0.11)
+      em-http-request (~> 1.0)
+      eventmachine
+      httpclient
+      membrane (~> 0.0.2)
+      mime-types
+      multipart-post
+      nats (~> 0.4.24)
+      posix-spawn (~> 0.3.6)
+      thin
+      vmstat (~> 2.0)
+      yajl-ruby
+
+GIT
   remote: https://github.com/cloudfoundry/warden.git
   revision: 6d46e3ab019cd8f2eb294c1078550e78482477eb
   specs:
@@ -73,6 +90,7 @@ DEPENDENCIES
   rspec
   steno (~> 0.0.15)!
   sys-filesystem
+  vcap_common!
   warden-client!
   warden-protocol!
   yajl-ruby

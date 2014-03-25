@@ -29,6 +29,7 @@ module Warden
           "unix_domain_path"        => String,
           "unix_domain_permissions" => Integer,
 
+          "pid_filename"        => String,
           optional("container_rootfs_path") => String,
           optional("container_depot_path")  => String,
 

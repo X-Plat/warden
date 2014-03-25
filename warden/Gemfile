@@ -10,6 +10,7 @@ gem "yajl-ruby"
 
 gem "warden-protocol", :git => "https://github.com/cloudfoundry/warden.git"
 gem "warden-client", :git => "https://github.com/cloudfoundry/warden.git"
+gem "vcap_common", :git => "https://github.com/cloudfoundry/vcap-common.git"
 
 group :spec do
   gem "rspec"

@@ -13,6 +13,8 @@ require "steno/core_ext"
 require "warden/protocol"
 require "yajl"
 
+require "vcap/common"
+
 module Warden
 
   module Container
@@ -85,6 +87,19 @@ module Warden
           @container_depot_path ||= File.join(@root_path, "instances")
 
           FileUtils.mkdir_p(@container_depot_path)
+	  setup_pid_file(config)
+        end
+
+        def setup_pid_file(config)
+            path = config.server["pid_filename"]
+
+            begin
+                pid_file = VCAP::PidFile.new(path, false)
+                pid_file.unlink_at_exit
+            rescue => err
+                logger.error "Cannot create pid file at #{path} (#{err})"
+                raise
+            end
         end
 
         def job_id=(job_id)
