@@ -15,6 +15,7 @@ server:
   #
   container_grace_time: 300
 
+  pid_filename: /home/work/warden/warden/status/warden.pid
   unix_domain_permissions: 0777
 
   # Specifies the path to the base chroot used as the read-only root
@@ -36,6 +37,7 @@ server:
 
   quota:
     disk_quota_enabled: true
+
 
 health_check_server:
   port: 2345
