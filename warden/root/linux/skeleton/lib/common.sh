@@ -55,6 +55,7 @@ function setup_fs_other() {
   chmod 1777 tmp/rootfs/tmp
   overlay_directory_in_rootfs /tmp rw
   overlay_directory_in_rootfs /app rw
+  overlay_directory_in_rootfs /var rw
 }
 
 function setup_fs_ubuntu() {
