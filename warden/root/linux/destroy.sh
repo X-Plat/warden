@@ -25,6 +25,11 @@ then
   then
     $target/destroy.sh
   fi
-
-  rm -rf $target
+  source $target/etc/config
+  if [[ $backup == "true" ]]
+  then
+     [[ -d $backup_path ]] || mkdir -p $backup_path && mv $target $backup_path
+  else
+    rm -rf $target
+  fi
 fi
