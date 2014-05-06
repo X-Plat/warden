@@ -83,6 +83,7 @@ module Warden
           "rootfs_path" => container_rootfs_path,
           "allow_nested_warden" => Server.config.allow_nested_warden?.to_s,
           "container_iface_mtu" => container_iface_mtu,
+          "username" => app_user,
         }
         env
       end
@@ -129,7 +130,7 @@ module Warden
       def create_job(request)
         wsh_path = File.join(bin_path, "wsh")
         socket_path = File.join(container_path, "run", "wshd.sock")
-        user = request.privileged ? "root" : "vcap"
+        user = request.privileged ? "root" : app_user
 
         # Build arguments
         args  = [wsh_path]
@@ -156,7 +157,7 @@ module Warden
         src_path = request.src_path
         dst_path = request.dst_path
 
-        perform_rsync(src_path, "vcap@container:#{dst_path}")
+        perform_rsync(src_path, "#{app_user}@container:#{dst_path}")
 
         nil
       end
@@ -165,7 +166,7 @@ module Warden
         src_path = request.src_path
         dst_path = request.dst_path
 
-        perform_rsync("vcap@container:#{src_path}", dst_path)
+        perform_rsync("#{app_user}@container:#{src_path}", dst_path)
 
         if request.owner
           sh "chown", "-R", request.owner, dst_path
