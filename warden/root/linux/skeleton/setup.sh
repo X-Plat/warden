@@ -93,8 +93,11 @@ fi
 
 # Add vcap user if not already present
 $(which chroot) mnt env -i /bin/bash -l <<-EOS
-if ! id vcap > /dev/null 2>&1
+#if ! id vcap > /dev/null 2>&1
+if ! id $username > /dev/null 2>&1
 then
-  useradd -mU -u $user_uid -s /bin/bash vcap
+  #useradd -mU -u $user_uid -s /bin/bash vcap
+  useradd -mU -u $user_uid -s /bin/bash $username
+  #chmod 755 /home/$username
 fi
 EOS
