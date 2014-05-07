@@ -14,6 +14,8 @@ module Warden
         "quota" => {
           "disk_quota_enabled" => true,
         },
+        "container_backup"=>true,
+        "container_backup_path"=>"/home/work/warden/containers_backup/",
       }
     end
 
@@ -56,6 +58,9 @@ module Warden
           },
 
           "job_output_limit" => Integer,
+        
+          "container_backup"=>bool,
+          "container_backup_path"=>String,
 
           "quota" => {
             optional("disk_quota_enabled") => bool,
@@ -155,6 +160,8 @@ module Warden
     attr_reader :network
     attr_reader :port
     attr_reader :user
+    attr_reader :container_backup
+    attr_reader :container_backup_path
 
     def initialize(config)
       @config = config

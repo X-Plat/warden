@@ -83,6 +83,8 @@ module Warden
           "user_uid" => uid,
           "rootfs_path" => container_rootfs_path,
           "username" => app_user,
+          "backup_path"=>container_backup_path,
+          "backup"=>container_backup,
         }
         env
       end

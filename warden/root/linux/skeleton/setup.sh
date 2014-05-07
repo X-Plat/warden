@@ -29,6 +29,8 @@ network_container_ip=$network_container_ip
 network_container_iface=$network_container_iface
 user_uid=$user_uid
 rootfs_path=$rootfs_path
+backup_path=$backup_path
+backup=$backup
 EOS
 
 setup_fs

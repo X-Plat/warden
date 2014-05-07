@@ -56,6 +56,8 @@ module Warden
         attr_reader :root_path
         attr_reader :container_rootfs_path
         attr_reader :container_depot_path
+        attr_reader :container_backup
+        attr_reader :container_backup_path
 
         # Stores a map of handles to their respective container objects. Only
         # live containers are reachable through this map. Containers are only
@@ -86,8 +88,11 @@ module Warden
           @container_depot_path   = config.server["container_depot_path"]
           @container_depot_path ||= File.join(@root_path, "instances")
 
+          @container_backup_path=config.server["container_backup_path"]
+          @container_backup=config.server["container_backup"]
+
           FileUtils.mkdir_p(@container_depot_path)
-	  setup_pid_file(config)
+	      setup_pid_file(config)
         end
 
         def setup_pid_file(config)
@@ -265,6 +270,14 @@ module Warden
       # Path to the chroot used as the ro portion of the union mount
       def container_rootfs_path
         @container_rootfs_path ||= self.class.container_rootfs_path
+      end
+
+      def container_backup_path
+        @container_backup_path ||= self.class.container_backup_path
+      end
+
+      def container_backup
+        @container_backup ||= self.class.container_backup
       end
 
       # Path to the directory that will house all created containers
