@@ -1,0 +1,7 @@
+- DEA_NG:
+  - 2.0.3:
+    release: 2014-05-13
+    description: 
+      - add a switch in destroy.sh: whether to store the files locally when container is stopped
+      - enable rw permition to var dir
+
