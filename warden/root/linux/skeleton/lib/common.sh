@@ -56,6 +56,8 @@ function setup_fs_other() {
   overlay_directory_in_rootfs /tmp rw
   overlay_directory_in_rootfs /app rw
   overlay_directory_in_rootfs /var rw
+  overlay_directory_in_rootfs /lib64 rw
+  overlay_directory_in_rootfs /bin rw
 }
 
 function setup_fs_ubuntu() {
