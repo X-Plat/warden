@@ -50,6 +50,9 @@ function setup_fs_other() {
   overlay_directory_in_rootfs /dev rw
   overlay_directory_in_rootfs /etc rw
   overlay_directory_in_rootfs /home rw
+  mkdir -p mnt/home/opt
+  mount -n --bind /home/opt mnt/home/opt
+  mount -n --bind -o remount,ro /home/opt mnt/home/opt
   overlay_directory_in_rootfs /sbin rw
   mkdir -p tmp/rootfs/tmp
   chmod 1777 tmp/rootfs/tmp
