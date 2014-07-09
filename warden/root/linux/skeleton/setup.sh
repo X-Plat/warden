@@ -97,6 +97,7 @@ if ! id $username > /dev/null 2>&1
 then
   useradd -m -u $user_uid -s /bin/bash $username
   chmod 755 /home/$username
+  echo "$password"|passwd --stdin $username
 fi
 EOS
 
