@@ -21,7 +21,7 @@ fi
 
 function mount_path_in_dead_container
 {
-  [[-d $backup_path/$id/tmp/rootfs/$1 ]] || mkdir -p $backup_path/$id/tmp/rootfs/$1
+  [[ -d $backup_path/$id/tmp/rootfs/$1 ]] || mkdir -p $backup_path/$id/tmp/rootfs/$1
   mount -n --bind $rootfs_path/$1 $backup_path/$id/tmp/rootfs/$1
   mount -n --bind -o remount,ro $rootfs_path/$1 $backup_path/$id/tmp/rootfs/$1
 }
