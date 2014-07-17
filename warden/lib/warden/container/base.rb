@@ -53,6 +53,7 @@ module Warden
       class << self
 
         attr_reader :app_user
+        attr_reader :app_user_password
         attr_reader :root_path
         attr_reader :container_rootfs_path
         attr_reader :container_depot_path
@@ -79,6 +80,7 @@ module Warden
         # Called before the server starts.
         def setup(config)
           @app_user = config.user["username"]
+          @app_user_password = config.user["password"]
           @root_path = File.join(Warden::Util.path("root"),
                                  self.name.split("::").last.downcase)
 
@@ -261,6 +263,10 @@ module Warden
 
       def app_user
         @app_user ||= self.class.app_user
+      end
+
+      def app_user_password
+        @app_user_password ||= self.class.app_user_password
       end
 
       def root_path
