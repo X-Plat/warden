@@ -7,14 +7,17 @@ shopt -s nullglob
 
 filter_forward_chain="warden-forward"
 filter_default_chain="warden-default"
-filter_instance_prefix="warden-instance-"
+filter_instance_prefix="warden-i-"
 nat_prerouting_chain="warden-prerouting"
 nat_postrouting_chain="warden-postrouting"
-nat_instance_prefix="warden-instance-"
+nat_instance_prefix="warden-i-"
 
 # Default ALLOW_NETWORKS/DENY_NETWORKS to empty
 ALLOW_NETWORKS=${ALLOW_NETWORKS:-}
 DENY_NETWORKS=${DENY_NETWORKS:-}
+
+# Default ALLOW_HOST_ACCESS to false
+ALLOW_HOST_ACCESS=${ALLOW_HOST_ACCESS:-false}
 
 function external_ip() {
   # The ';tx;d;:x' trick deletes non-matching lines
@@ -68,6 +71,18 @@ function teardown_filter() {
     sed -e "s/-A/-D/" -e "s/\s\+\$//" |
     xargs --no-run-if-empty --max-lines=1 iptables
 
+  # Remove block-traffic-to-host rules
+  iptables -S INPUT |
+    grep 'block-traffic-to-host' |
+    sed -e "s/-A/-D/" |
+    xargs --no-run-if-empty --max-lines=1 iptables
+
+  # Remove related-traffic rules
+  iptables -S INPUT |
+    grep 'related-traffic' |
+    sed -e "s/-A/-D/" |
+    xargs --no-run-if-empty --max-lines=1 iptables
+
   iptables -F ${filter_forward_chain} 2> /dev/null || true
   iptables -F ${filter_default_chain} 2> /dev/null || true
 }
@@ -102,6 +117,16 @@ function setup_filter() {
 
     iptables -A ${filter_default_chain} --destination "$n" --jump DROP
   done
+
+  iptables -A ${filter_default_chain} --jump REJECT
+
+  # Accept packets related to previously established connections
+  iptables -I INPUT -m state --state ESTABLISHED,RELATED --jump ACCEPT -m comment --comment 'related-traffic'
+
+  # Reject traffic from containers to host
+  if [ "$ALLOW_HOST_ACCESS" != "true" ]; then
+    iptables -A INPUT -s ${POOL_NETWORK} --jump REJECT -m comment --comment 'block-traffic-to-host'
+  fi
 
   # Forward outbound traffic via ${filter_forward_chain}
   iptables -A FORWARD -i w-+ --jump ${filter_forward_chain}

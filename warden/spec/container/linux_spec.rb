@@ -6,6 +6,8 @@ require "warden/server"
 require "warden/client"
 require "warden/network"
 require "warden/util"
+require "ipaddr"
+require "socket"
 
 require "warden/container/linux"
 
@@ -22,6 +24,7 @@ describe "linux", :platform => "linux", :needs_root => true do
   let(:netmask) { Warden::Network::Netmask.new(255, 255, 255, 252) }
   let(:allow_networks) { [] }
   let(:deny_networks) { [] }
+  let(:allow_host_access) { false }
   let(:mtu) { 1500 }
   let(:job_output_limit) { 100 * 1024 }
   let(:server_pidfile) { nil }
@@ -101,27 +104,29 @@ describe "linux", :platform => "linux", :needs_root => true do
       Signal.trap("TERM") { exit }
 
       Warden::Server.setup(
-        "server" => {
-          "unix_domain_path" => unix_domain_path,
-          "container_klass" => container_klass,
-          "container_rootfs_path" => container_rootfs_path,
-          "container_depot_path" => container_depot_path,
-          "container_grace_time" => 5,
-          "job_output_limit" => job_output_limit,
-          "pidfile" => server_pidfile,
-          "syslog_socket" => syslog_socket },
-        "network" => {
-          "pool_start_address" => @start_address,
-          "pool_size" => 64,
-          "mtu" => mtu,
-          "allow_networks" => allow_networks,
-          "deny_networks" => deny_networks },
-        "port" => {
-          "pool_start_port" => 64000,
-          "pool_size" => 1000 },
-        "logging" => {
-          "level" => "debug",
-          "file" => File.join(work_path, "warden.log") }
+          "server" => {
+              "unix_domain_path" => unix_domain_path,
+              "container_klass" => container_klass,
+              "container_rootfs_path" => container_rootfs_path,
+              "container_depot_path" => container_depot_path,
+              "container_grace_time" => 5,
+              "job_output_limit" => job_output_limit,
+              "pidfile" => server_pidfile,
+              "syslog_socket" => syslog_socket },
+          "network" => {
+              "pool_start_address" => @start_address,
+              "pool_size" => 64,
+              "mtu" => mtu,
+              "allow_networks" => allow_networks,
+              "deny_networks" => deny_networks,
+              "allow_host_access" => allow_host_access },
+          "port" => {
+              "pool_start_port" => 64000,
+              "pool_size" => 1000},
+          "logging" => {
+              "level" => "debug",
+              "file" => File.join(work_path, "warden.log")
+          }
       )
 
       Warden::Server.run!
@@ -336,7 +341,7 @@ describe "linux", :platform => "linux", :needs_root => true do
       @handle = client.create.handle
     end
 
-    let(:options) { { :handle => handle, :script => script } }
+    let(:options) { {:handle => handle, :script => script} }
 
     def run
       response = client.run(options)
@@ -451,7 +456,6 @@ describe "linux", :platform => "linux", :needs_root => true do
     end
   end
 
-
   describe "net_out" do
     def net_out(options = {})
       response = client.net_out(options)
@@ -466,63 +470,372 @@ describe "linux", :platform => "linux", :needs_root => true do
     end
 
     def reachable?(handle, ip)
-      response = run(handle, "ping -q -W 1 -c 1 #{ip}")
-      response.stdout =~ /\b(\d+) received\b/i
-      $1.to_i > 0
+      response = run(handle, "ping -q -w1 -c1 #{ip}")
+      response.exit_status == 0
     end
 
-    context "reachability" do
-      # Allow traffic to the first two subnets
-      let(:allow_networks) do
-        ["4.2.2.1/32"]
+    def verify_tcp_connectivity(server_container, client_container, port)
+      # Listen for a connection in server_container
+      server_script = "echo ok | nc -l #{port}"
+      client.spawn(:handle => server_container[:handle],
+                   :script => server_script).job_id
+
+      # Try to connect to the server container
+      client_script = "nc -w1 #{server_container[:ip]} #{port}"
+      response = run(client_container[:handle], client_script)
+
+      unless response.stdout.strip == "ok"
+        # Clean up
+        client.run(:handle => server_container[:handle], :script => "pkill -9 nc")
+        return false
       end
 
-      # Deny traffic to everywhere else
-      let(:deny_networks) do
-        ["0.0.0.0/0"]
+      true
+    end
+
+    def verify_udp_connectivity(server_container, client_container, port)
+      # Listen for a connection in server_container
+      server_script = "nc -u -l #{port}"
+      job_id = client.spawn(:handle => server_container[:handle],
+                            :script => server_script).job_id
+
+      # Try to connect to the server container
+      client_script = "echo ok > /dev/udp/#{server_container[:ip]}/#{port}"
+      run(client_container[:handle], client_script)
+
+      cleanup_script = "echo fail > /dev/udp/#{server_container[:ip]}/#{port}"
+      client.run(:handle => server_container[:handle], :script => cleanup_script)
+      response = client.link(:handle => server_container[:handle], :job_id => job_id)
+      response.stdout.strip == "ok"
+    end
+
+    def verify_ping_connectivity(server_container, client_container)
+      # Try to ping the server container
+      client_script = "ping -c1 -w1 #{server_container[:ip]}"
+      response = run(client_container[:handle], client_script)
+
+      response.exit_status == 0
+    end
+
+    describe "default networking" do
+      attr_reader :handle
+
+      def host_first_ipv4
+        Socket.ip_address_list.detect { |intf| intf.ipv4? && !intf.ipv4_loopback? && !intf.ipv4_multicast? }
       end
 
       before do
+        @handle = client.create.handle
+      end
+
+      context "when connecting to a remote address" do
+        it "rejects outbound udp traffic" do
+          client_script = "curl -s --connect-timeout 1 http://www.example.com/ -o /dev/null"
+          response = run(handle, client_script)
+          expect(response.exit_status).to eq 6 # "Couldn't resolve host"
+        end
+
+        it "rejects outbound tcp traffic" do
+          client.net_out(:handle => handle, :port => 53, :protocol => Warden::Protocol::NetOutRequest::Protocol::UDP).should be_ok
+
+          client_script = "curl -s --connect-timeout 1 http://www.example.com/ -o /dev/null"
+          response = run(handle, client_script)
+          expect(response.exit_status).to eq 7 # "Failed to connect to host"
+        end
+
+        it "rejects outbound icmp traffic" do
+          client.net_out(:handle => handle, :port => 53, :protocol => Warden::Protocol::NetOutRequest::Protocol::UDP).should be_ok
+
+          client_script = "ping -w1 -c1 www.example.com"
+          response = run(handle, client_script)
+          expect(response.exit_status).to eq 1 # "If ping does not receive any reply packets at all"
+        end
+      end
+
+      context "when connecting to the host" do
+        def verify_tcp_connectivity_to_host(handle)
+          server_pid = Process.spawn("echo ok | nc -l 8080", pgroup: true)
+          client_script = "nc -w1 #{host_first_ipv4.ip_address} 8080"
+          response = run(handle, client_script)
+
+          Process.kill("TERM", -Process.getpgid(server_pid))
+
+          response.exit_status == 0
+        end
+
+        def verify_udp_connectivity_to_host(handle)
+          socket = UDPSocket.new
+          socket.bind(host_first_ipv4.ip_address.to_s, 8080)
+
+          client_script = "echo ok > /dev/udp/#{host_first_ipv4.ip_address}/8080"
+          response = run(handle, client_script)
+          expect(response.exit_status).to eq 0
+
+          begin
+            socket.recvfrom_nonblock(3)
+            return true
+          rescue IO::WaitReadable
+            return false
+          ensure
+            socket.close
+          end
+        end
+
+        def verify_icmp_connectivity_to_host(handle)
+          # Try to ping the host
+          client_script = "ping -c1 -w1 #{host_first_ipv4.ip_address}"
+          response = client.run(:handle => handle, :script => client_script)
+          response.exit_status == 0
+        end
+
+        it "rejects outbound tcp traffic" do
+          expect(verify_tcp_connectivity_to_host(handle)).to eq false
+        end
+
+        it "rejects outbound udp traffic" do
+          expect(verify_udp_connectivity_to_host(handle)).to eq false
+        end
+
+        it "rejects outbound icmp traffic" do
+          expect(verify_icmp_connectivity_to_host(handle)).to eq false
+        end
+
+        context "when warden is configured to allow containers to talk to the host" do
+          let(:allow_host_access) { true }
+
+          it "allows outbound tcp traffic" do
+            expect(verify_tcp_connectivity_to_host(handle)).to eq true
+          end
+
+          it "allows outbound udp traffic" do
+            expect(verify_udp_connectivity_to_host(handle)).to eq true
+          end
+
+          it "allows outbound icmp traffic" do
+            expect(verify_icmp_connectivity_to_host(handle)).to eq true
+          end
+        end
+      end
+
+      context "when connecting to another container" do
+        before do
+          @containers = 3.times.map do
+            handle = client.create.handle
+            {:handle => handle, :ip => client.info(:handle => handle).container_ip}
+          end
+        end
+
+        it "does not allow traffic to networks not configured in allowed networks" do
+          [0, 1, 2].permutation(2) do |first, second|
+            expect(verify_tcp_connectivity(@containers[first], @containers[second], 2000)).to eq false
+            expect(verify_udp_connectivity(@containers[first], @containers[second], 2002)).to eq false
+            expect(verify_ping_connectivity(@containers[first], @containers[second])).to eq false
+          end
+        end
+      end
+    end
+
+    context "reachability" do
+      before do
         @containers = 3.times.map do
           handle = client.create.handle
-          { :handle => handle, :ip => client.info(:handle => handle).container_ip }
+          {:handle => handle, :ip => client.info(:handle => handle).container_ip}
         end
       end
 
       it "reaches every container from the host" do
         @containers.each do |e|
-          `ping -q -w 1 -c 1 #{e[:ip]}` =~ /\b(\d+) received\b/i
-          $1.to_i.should == 1
+          `ping -q -w1 -c1 #{e[:ip]}`
+          $?.should == 0
         end
       end
 
-      it "allows traffic to networks configured in allowed networks" do
-        reachable?(@containers[0][:handle], "4.2.2.1").should be_true
-        reachable?(@containers[1][:handle], "4.2.2.1").should be_true
-        reachable?(@containers[2][:handle], "4.2.2.1").should be_true
-      end
+      context "when allow_networks is configured" do
+        # Allow traffic to the first two subnets
+        host_gw_ip = `ip route get 1.1.1.1 | cut -f 3 -d ' ' |head -n 1`
+        let(:allow_networks) do
+          [host_gw_ip]
+        end
 
-      it "does not allow traffic to networks not configured in allowed networks" do
-        [0, 1, 2].permutation(2) do |first, second|
-          reachable?(@containers[first][:handle], @containers[second][:ip]).should be_false
+        it "allows traffic to networks configured in allowed networks" do
+          reachable?(@containers[0][:handle], host_gw_ip).should be_true
+          reachable?(@containers[1][:handle], host_gw_ip).should be_true
+          reachable?(@containers[2][:handle], host_gw_ip).should be_true
+        end
+
+        it "disallows traffic to networks that are not configured in allowed networks" do
+          reachable?(@containers[0][:handle], "8.8.8.8").should be_false
+          reachable?(@containers[1][:handle], "8.8.8.8").should be_false
+          reachable?(@containers[2][:handle], "8.8.8.8").should be_false
         end
       end
 
-      it "allows traffic to networks after net_out" do
-        net_out(:handle => @containers[0][:handle], :network => @containers[2][:ip])
-        reachable?(@containers[0][:handle], @containers[2][:ip]).should be_true
-        net_out(:handle => @containers[2][:handle], :network => @containers[0][:ip])
-        reachable?(@containers[2][:handle], @containers[0][:ip]).should be_true
+      describe "net_out control" do
+        it "disallows traffic to networks before net_out" do
+          expect(verify_tcp_connectivity(@containers[1], @containers[0], 2000)).to eq false
+          expect(verify_udp_connectivity(@containers[1], @containers[0], 2000)).to eq false
+          expect(verify_ping_connectivity(@containers[2], @containers[1])).to eq false
+        end
+
+        it "allows outbound tcp traffic to networks after net_out" do
+          net_out(:handle => @containers[0][:handle], :network => @containers[1][:ip], :port => 2000, :protocol => Warden::Protocol::NetOutRequest::Protocol::TCP)
+          expect(verify_tcp_connectivity(@containers[1], @containers[0], 2000)).to eq true
+          client.net_in(:handle => @containers[0][:handle])
+          expect(verify_tcp_connectivity(@containers[1], @containers[0], 2001)).to eq false
+        end
+
+        it "allows outbound udp traffic to networks after net_out" do
+          net_out(:handle => @containers[0][:handle], :network => @containers[1][:ip], :port => 2000, :protocol => Warden::Protocol::NetOutRequest::Protocol::UDP)
+          expect(verify_udp_connectivity(@containers[1], @containers[0], 2000)).to eq true
+          expect(verify_udp_connectivity(@containers[1], @containers[0], 2001)).to eq false
+        end
+
+        context "icmp" do
+          # Assertions testing that containers do NOT have connectivity should only be done
+          # between containers that have NEVER had connectivity in any tests. This is because
+          # the ESTABLISHED state is cached for 30 seconds and can pollute other tests.
+          it "allows outbound icmp traffic after net out" do
+            net_out(:handle => @containers[0][:handle],
+                    :network => @containers[1][:ip],
+                    :protocol => Warden::Protocol::NetOutRequest::Protocol::ICMP,
+                    :icmp_type => 8, :icmp_code => 0) # ICMP Echo Request
+
+            expect(verify_ping_connectivity(@containers[1], @containers[0])).to eq true
+          end
+
+          it "does not allow outbound when type does not match" do
+            net_out(:handle => @containers[1][:handle],
+                    :network => @containers[2][:ip],
+                    :protocol => Warden::Protocol::NetOutRequest::Protocol::ICMP,
+                    :icmp_type => 0, :icmp_code => 0) # ICMP Echo Reply
+
+            expect(verify_ping_connectivity(@containers[2], @containers[1])).to eq false
+          end
+
+          it "allows outbound icmp traffic after net out when type and code are -1" do
+            net_out(:handle => @containers[0][:handle],
+                    :network => @containers[1][:ip],
+                    :protocol => Warden::Protocol::NetOutRequest::Protocol::ICMP,
+                    :icmp_type => -1, :icmp_code => -1) # Everything
+
+            expect(verify_ping_connectivity(@containers[1], @containers[0])).to eq true
+          end
+
+          it "does not allow outbound when code does not match" do
+            net_out(:handle => @containers[1][:handle],
+                    :network => @containers[2][:ip],
+                    :protocol => Warden::Protocol::NetOutRequest::Protocol::ICMP,
+                    :icmp_type => 8, :icmp_code => 8) # Bogus code
+
+            expect(verify_ping_connectivity(@containers[2], @containers[1])).to eq false
+          end
+        end
+
+        context "all protocols" do
+          it "allows outbound traffic over all protocols to networks after net_out" do
+            net_out(:handle => @containers[0][:handle], :network => @containers[1][:ip], :protocol => Warden::Protocol::NetOutRequest::Protocol::ALL)
+            expect(verify_tcp_connectivity(@containers[1], @containers[0], 2000)).to eq true
+            expect(verify_tcp_connectivity(@containers[1], @containers[0], 2001)).to eq true
+            expect(verify_udp_connectivity(@containers[1], @containers[0], 2000)).to eq true
+            expect(verify_udp_connectivity(@containers[1], @containers[0], 2001)).to eq true
+            expect(verify_ping_connectivity(@containers[1], @containers[0])).to eq true
+          end
+        end
+
+        context "logs outbound requests" do
+          it "logs only tcp traffic" do
+            net_out(:handle => @containers[0][:handle], :network => @containers[1][:ip], :port => 2000, :protocol => Warden::Protocol::NetOutRequest::Protocol::TCP, :log => true)
+            net_out(:handle => @containers[0][:handle], :network => @containers[1][:ip], :port => 2000, :protocol => Warden::Protocol::NetOutRequest::Protocol::UDP, :log => true)
+            net_out(:handle => @containers[0][:handle], :network => @containers[1][:ip], :port => 2001, :protocol => Warden::Protocol::NetOutRequest::Protocol::TCP)
+            net_out(:handle => @containers[0][:handle], :network => @containers[1][:ip], :port => 2001, :protocol => Warden::Protocol::NetOutRequest::Protocol::UDP)
+            verify_tcp_connectivity(@containers[1], @containers[0], 2000)
+            verify_tcp_connectivity(@containers[1], @containers[0], 2001)
+            verify_udp_connectivity(@containers[1], @containers[0], 2000)
+            verify_udp_connectivity(@containers[1], @containers[0], 2001)
+            verify_ping_connectivity(@containers[1], @containers[0])
+
+            out = `grep -c warden-i-#{@containers[0][:handle]} /var/log/syslog`.chomp
+            expect(out).to eq("1")
+          end
+        end
+
+        context "when port ranges are specified" do
+          it "should allow access to all ports in the range" do
+            net_out(:handle => @containers[0][:handle], :network => @containers[1][:ip], :port_range => "2000:2002", :protocol => Warden::Protocol::NetOutRequest::Protocol::TCP)
+            expect(verify_tcp_connectivity(@containers[1], @containers[0], 2000)).to eq true
+            expect(verify_tcp_connectivity(@containers[1], @containers[0], 2001)).to eq true
+            expect(verify_tcp_connectivity(@containers[1], @containers[0], 2002)).to eq true
+            expect(verify_tcp_connectivity(@containers[1], @containers[0], 1999)).to eq false
+          end
+        end
+
+        context "network using cidr" do
+          it "can connect to multiple subnets when the cidr includes them" do
+            network = "#{@containers[0][:ip]}/24" # All local warden containers
+            net_out(:handle => @containers[0][:handle], :network => network, :port => 2000, :protocol => Warden::Protocol::NetOutRequest::Protocol::TCP)
+
+            expect(verify_tcp_connectivity(@containers[1], @containers[0], 2000)).to eq true
+            expect(verify_tcp_connectivity(@containers[2], @containers[0], 2000)).to eq true
+          end
+
+          it "cannot connect to a subnet that is not included" do
+            network = "#{@containers[1][:ip]}/30" # One server container
+            net_out(:handle => @containers[0][:handle], :network => network, :port => 2000, :protocol => Warden::Protocol::NetOutRequest::Protocol::TCP)
+
+            expect(verify_tcp_connectivity(@containers[1], @containers[0], 2000)).to eq true
+            expect(verify_tcp_connectivity(@containers[2], @containers[0], 2000)).to eq false
+          end
+        end
+
+        context "network using range" do
+          it "can connect to multiple subnets when the range includes them" do
+            first_address = IPAddr.new("#{@containers[0][:ip]}").&(IPAddr.new('255.255.255.0')).to_s
+            last_address = IPAddr.new("#{@containers[0][:ip]}").|(IPAddr.new('0.0.0.255')).to_s
+            network = "#{first_address}-#{last_address}" # All local warden containers
+            net_out(:handle => @containers[0][:handle], :network => network, :port => 2000, :protocol => Warden::Protocol::NetOutRequest::Protocol::TCP)
+
+            expect(verify_tcp_connectivity(@containers[1], @containers[0], 2000)).to eq true
+            expect(verify_tcp_connectivity(@containers[2], @containers[0], 2000)).to eq true
+          end
+
+          it "cannot connect to a subnet that is not included in the range" do
+            first_address = IPAddr.new("#{@containers[1][:ip]}").&(IPAddr.new('255.255.255.252')).to_s
+            last_address = IPAddr.new("#{@containers[1][:ip]}").|(IPAddr.new('0.0.0.3')).to_s
+            network = "#{first_address}-#{last_address}" # One server container
+            net_out(:handle => @containers[0][:handle], :network => network, :port => 2000, :protocol => Warden::Protocol::NetOutRequest::Protocol::TCP)
+
+            expect(verify_tcp_connectivity(@containers[1], @containers[0], 2000)).to eq true
+            expect(verify_tcp_connectivity(@containers[2], @containers[0], 2000)).to eq false
+          end
+        end
+
+        context "after restoring from snapshot" do
+          it "restores net-out rules to containers with snapshots" do
+            net_out(:handle => @containers[0][:handle], :network => @containers[1][:ip], :port => 2000, :protocol => Warden::Protocol::NetOutRequest::Protocol::TCP)
+            expect(verify_tcp_connectivity(@containers[1], @containers[0], 2000)).to eq true
+
+            iptable_rule = `/sbin/iptables-save | grep #{@containers[0][:handle]}| grep 2000 | sed -e 's/^-A/-D/'`
+            iptable_rule = iptable_rule.chomp
+            `iptables #{iptable_rule}`
+
+            expect(verify_tcp_connectivity(@containers[1], @containers[0], 2000)).to eq false
+
+            drain_and_restart
+            reset_client
+
+            expect(verify_tcp_connectivity(@containers[1], @containers[0], 2000)).to eq true
+          end
+        end
       end
     end
 
-    describe "check network and port fields" do
+    describe "check argument handling" do
       let(:handle) { client.create.handle }
 
       it "should raise error when both fields are absent" do
         expect do
           net_out(:handle => handle)
-        end.to raise_error(Warden::Client::ServerError, %r"specify network and/or port"i)
+        end.to raise_error(Warden::Client::ServerError, %r"specify network, port, and/or port_range"i)
       end
 
       it "should not raise error when network field is present" do
@@ -535,6 +848,18 @@ describe "linux", :platform => "linux", :needs_root => true do
 
       it "should not raise error when both network and port fields are present" do
         net_out(:handle => handle, :network => "4.2.2.2", :port => 1234).should be_ok
+      end
+
+      it "should raise an error when the port range specifies min > max" do
+        expect do
+          net_out(:handle => handle, :port_range => "2002:2000", :protocol => Warden::Protocol::NetOutRequest::Protocol::TCP)
+        end.to raise_error(Warden::Client::ServerError, %r"port range maximum must be greater than minimum"i)
+      end
+
+      it "should raise an error when an unknown protocol is specified" do
+        expect do
+          net_out(:handle => handle, :protocol => 10)
+        end.to raise_error(Warden::Protocol::ProtocolError)
       end
     end
   end
@@ -581,7 +906,7 @@ describe "linux", :platform => "linux", :needs_root => true do
 
       # Connect through nc
       attempt do
-        `echo | nc #{external_ip} #{response.host_port}`.chomp == "ok"
+        `echo | nc -w1 #{external_ip} #{response.host_port}`.chomp == "ok"
       end
 
       # Clean up
@@ -614,8 +939,10 @@ describe "linux", :platform => "linux", :needs_root => true do
     end
 
     it "should not redirect requests to other servers' container_port" do
-      net_in(:host_port => 80, :container_port => 8080)
+      client.net_out(:handle => handle, :port => 80).should be_ok
+      client.net_out(:handle => handle, :port => 53, :protocol => Warden::Protocol::NetOutRequest::Protocol::UDP).should be_ok
 
+      net_in(:host_port => 80, :container_port => 8080)
       script = "curl -s -w '%{http_code}' http://www.example.com/ -o /dev/null"
       job_id = client.spawn(:handle => handle, :script => script).job_id
 
@@ -768,6 +1095,71 @@ describe "linux", :platform => "linux", :needs_root => true do
       expect do
         create
       end.to raise_error(Warden::Client::ServerError)
+    end
+  end
+
+  describe "/dev/shm" do
+    attr_reader :handle
+
+    before do
+      response = client.create
+      response.should be_ok
+
+      @handle = response.handle
+    end
+
+    def run(script)
+      response = client.run(:handle => handle, :script => script)
+      response.should be_ok
+      response
+    end
+
+    it "is a directory" do
+      response = run("[ -d /dev/shm ]")
+      response.exit_status.should == 0
+    end
+
+    it "is mounted as a tmpfs device" do
+      response = run("grep /dev/shm /proc/mounts")
+      response.exit_status.should == 0
+      response.stdout.should match(/tmpfs/)
+    end
+
+    it "can be written to by unprivileged users" do
+      response = run("id -u > /dev/shm/id.txt")
+      response.exit_status.should == 0
+
+      response = run("cat /dev/shm/id.txt")
+      response.stdout.strip.should_not eq('0')
+    end
+
+    context "when there is a memory limit" do
+      let(:megabyte)     { 1024 * 1024 }
+      let(:memory_limit) { megabyte * 32 }
+
+      before do
+        response = client.limit_memory(:handle => handle, :limit_in_bytes => memory_limit)
+        response.limit_in_bytes.should == memory_limit
+      end
+
+      it "can write less than the memory limit" do
+        run("dd of=/dev/shm/out.bin if=/dev/urandom bs=#{megabyte} count=30")
+
+        response = client.info(:handle => handle)
+        response.state.should == "active"
+
+        response = run("du -m /dev/shm/out.bin | cut -f1")
+        response.stdout.strip.to_i.should be(30)
+      end
+
+      it "terminates when writing more data than the memory limit" do
+        run("dd of=/dev/shm/out.bin if=/dev/urandom bs=#{megabyte} count=34")
+        sleep 0.20 # wait a bit for the warden to be notified of the oom
+
+        response = client.info(:handle => handle)
+        response.state.should == "stopped"
+        response.events.should include("out of memory")
+      end
     end
   end
 
