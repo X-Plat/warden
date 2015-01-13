@@ -235,7 +235,7 @@ describe "linux", :platform => "linux", :needs_root => true do
 
     it "should default to a large number" do
       response = limit_memory
-      response.limit_in_bytes.should == 9223372036854775807
+      response.limit_in_bytes.should == 18446744073709551615
     end
 
     describe "setting limits" do
@@ -1223,7 +1223,7 @@ describe "linux", :platform => "linux", :needs_root => true do
   describe "create with MTU" do
     let(:mtu) { 1454 }
 
-    it "should set MTU" do
+    it "should set warden side MTU" do
       create_request = Warden::Protocol::CreateRequest.new
       create_request.network = @start_address
 
@@ -1233,6 +1233,18 @@ describe "linux", :platform => "linux", :needs_root => true do
       script = "/sbin/ifconfig w-#{response.handle}-1 | grep -Eo 'MTU:[0-9]+'"
       mtu_response = client.run(:handle => response.handle, :script => script)
       mtu_response.stdout.should == "MTU:1454\n"
+    end
+
+    it "should set host side MTU" do
+      create_request = Warden::Protocol::CreateRequest.new
+      create_request.network = @start_address
+
+      response = client.call(create_request)
+      response.should be_ok
+
+      script = "/sbin/ifconfig w-#{response.handle}-0 | grep -Eo 'MTU:[0-9]+'"
+      mtu_response = execute("#{script}")
+      mtu_response.should == "MTU:1454\n"
     end
   end
 
