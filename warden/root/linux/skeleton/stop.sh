@@ -57,7 +57,8 @@ fi
 # Wait for processes to quit
 while [[ $(ms) -lt $ms_end ]]
 do
-  if ! bin/wsh pgrep -c -v -P 0 > /dev/null
+  pid=$(bin/wsh pgrep -v -P 0  2>/dev/null)
+  if [ -z "$pid" ]
   then
     exit 0
   fi
